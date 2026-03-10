@@ -176,6 +176,8 @@ class PromoCode(Base):
     created_by_admin_id = Column(BigInteger, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     valid_until = Column(DateTime(timezone=True), nullable=True)
+    # "all" = all users, "active" = only users with active subscription
+    target_audience = Column(String, nullable=False, default="all")
 
     activations = relationship("PromoCodeActivation",
                                back_populates="promo_code",
