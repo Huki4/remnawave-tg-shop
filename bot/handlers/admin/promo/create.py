@@ -285,7 +285,35 @@ async def process_promo_max_activations_handler(message: types.Message,
         
         await state.update_data(max_activations=max_activations)
 
-        # Step 4: Ask for validity
+        # Step 3.5: Ask for target audience
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text="👥 Для всех пользователей",
+                callback_data="promo_target_select:all"
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text="✅ Только активные подписчики",
+                callback_data="promo_target_select:active"
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=_("admin_back_to_panel"),
+                callback_data="admin_action:main"
+            )
+        )
+        await message.answer(
+            "🎯 <b>Для кого промокод?</b>\n\nВыберите аудиторию:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+        await state.set_state(AdminStates.waiting_for_promo_target_audience)
+        return
+
+        # Step 4: Ask for validity (reached via callback below)
         data = await state.get_data()
         promo_type = data.get("promo_type", "bonus_days")
 
@@ -339,6 +367,53 @@ async def process_promo_max_activations_handler(message: types.Message,
     except Exception as e:
         logging.error(f"Error processing promo max activations: {e}")
         await message.answer(_("error_occurred_try_again"))
+
+
+# Step 3.5: Handle target audience selection
+@router.callback_query(F.data.startswith("promo_target_select:"), StateFilter(AdminStates.waiting_for_promo_target_audience))
+async def process_promo_target_audience(callback: types.CallbackQuery,
+                                        state: FSMContext,
+                                        i18n_data: dict,
+                                        settings: Settings):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    if not i18n or not callback.message:
+        await callback.answer("Error.", show_alert=True)
+        return
+    _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
+
+    target = callback.data.split(":")[-1]  # "all" or "active"
+    await state.update_data(target_audience=target)
+
+    data = await state.get_data()
+    promo_type = data.get("promo_type", "bonus_days")
+
+    if promo_type == "discount":
+        prompt_text = _(
+            "admin_promo_step4_validity_discount",
+            code=data.get("promo_code"),
+            discount_percentage=data.get("discount_percentage"),
+            max_activations=data.get("max_activations")
+        )
+    else:
+        prompt_text = _(
+            "admin_promo_step4_validity",
+            code=data.get("promo_code"),
+            bonus_days=data.get("bonus_days"),
+            max_activations=data.get("max_activations")
+        )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=_("admin_promo_unlimited_validity"), callback_data="promo_unlimited_validity"))
+    builder.row(InlineKeyboardButton(text=_("admin_promo_set_validity_days"), callback_data="promo_set_validity"))
+    builder.row(InlineKeyboardButton(text=_("admin_back_to_panel"), callback_data="admin_action:main"))
+
+    try:
+        await callback.message.edit_text(prompt_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(prompt_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await callback.answer()
+    await state.set_state(AdminStates.waiting_for_promo_validity_days)
 
 
 # Step 4: Handle unlimited validity
@@ -460,6 +535,9 @@ async def create_promo_code_final(callback_or_message,
             promo_data["bonus_days"] = data["bonus_days"]
             promo_data["discount_percentage"] = None
 
+        # Set target audience
+        promo_data["target_audience"] = data.get("target_audience", "all")
+
         # Set validity
         if data.get("validity_days"):
             promo_data["valid_until"] = datetime.now(timezone.utc) + timedelta(days=data["validity_days"])
@@ -539,6 +617,7 @@ async def create_promo_code_final(callback_or_message,
         AdminStates.waiting_for_promo_bonus_days,
         AdminStates.waiting_for_promo_discount_percentage,
         AdminStates.waiting_for_promo_max_activations,
+        AdminStates.waiting_for_promo_target_audience,
         AdminStates.waiting_for_promo_validity_days,
     ),
 )
