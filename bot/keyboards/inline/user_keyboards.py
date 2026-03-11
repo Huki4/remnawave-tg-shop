@@ -60,8 +60,6 @@ def _btn(key: str, cb: str = None, url: str = None,
     cfg = BUTTONS.get(key, {"text": key, "style": None, "icon": None})
     text = text_override if text_override is not None else cfg["text"]
     extra = {}
-    if cfg.get("style"):
-        extra["style"] = cfg["style"]
     if cfg.get("icon"):
         extra["icon_custom_emoji_id"] = cfg["icon"]
     if url:
@@ -433,8 +431,6 @@ def get_payment_method_keyboard(lang: str, i18n_instance,
             key, cb = method_map[method]
             cfg = BUTTONS.get(key, {})
             extra = {}
-            if cfg.get("style"):
-                extra["style"] = cfg["style"]
             if cfg.get("icon"):
                 extra["icon_custom_emoji_id"] = cfg["icon"]
             builder.row(InlineKeyboardButton(
@@ -679,6 +675,13 @@ def get_payment_methods_manage_keyboard(lang: str, i18n_instance, has_card: bool
 def get_back_to_payment_methods_keyboard(lang: str, i18n_instance) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="Назад", callback_data="main_action:subscribe"))
+    return builder.as_markup()
+
+
+def get_referral_link_keyboard(lang: str, i18n_instance, referral_link: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="Поделиться ссылкой", url=f"https://t.me/share/url?url={referral_link}"))
+    builder.row(InlineKeyboardButton(text="Назад", callback_data="main_action:main"))
     return builder.as_markup()
 
 
