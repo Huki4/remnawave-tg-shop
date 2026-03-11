@@ -279,3 +279,18 @@ async def show_queue_status_handler(callback: types.CallbackQuery, i18n_data: di
     except Exception as e:
         logging.error(f"Error getting queue status: {e}")
         await callback.answer("❌ Ошибка получения статуса очередей", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("admin_txn:page:"))
+async def admin_transactions_page_handler(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+    session: AsyncSession,
+):
+    try:
+        page = int(callback.data.split(":")[-1])
+    except (ValueError, IndexError):
+        page = 0
+    from . import payments as admin_payments_handlers
+    await admin_payments_handlers.view_payments_handler(callback, i18n_data, settings, session, page)
