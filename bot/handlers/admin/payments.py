@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import Settings
 from db.dal import payment_dal
 from db.models import Payment
-from bot.keyboards.inline.admin_keyboards import get_back_to_admin_panel_keyboard
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from bot.middlewares.i18n import JsonI18n
 
@@ -103,7 +102,9 @@ async def view_payments_handler(callback: types.CallbackQuery, i18n_data: dict,
     if not payments and page == 0:
         await callback.message.edit_text(
             _("admin_no_payments_found"),
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:stats_monitoring", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML"
         )
         await callback.answer()
@@ -140,19 +141,21 @@ async def view_payments_handler(callback: types.CallbackQuery, i18n_data: dict,
     # Export and refresh buttons
     builder.row(
         InlineKeyboardButton(
-            text=_("admin_export_payments_csv"), 
-            callback_data="payments_export_csv"
+            text=_("admin_export_payments_csv"),
+            callback_data="payments_export_csv",
+            icon_custom_emoji_id="5807510999326006028"  # 💾
         ),
         InlineKeyboardButton(
-            text=_("admin_refresh_payments"), 
-            callback_data=f"payments_page:{page}"
+            text=_("admin_refresh_payments"),
+            callback_data=f"payments_page:{page}",
+            icon_custom_emoji_id="5807767434643382465"  # 🔄
         )
     )
     
-    # Back button
     builder.row(InlineKeyboardButton(
-        text=_("back_to_admin_panel_button"), 
-        callback_data="admin_section:stats_monitoring"
+        text="Назад",
+        callback_data="admin_section:stats_monitoring",
+        icon_custom_emoji_id="5807679830195444280"  # ◀️
     ))
 
     await callback.message.edit_text(
