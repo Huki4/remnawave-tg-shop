@@ -52,9 +52,9 @@ async def show_bulk_days_menu(callback: types.CallbackQuery,
         icon_custom_emoji_id="6021690418398239007"
     ))
     builder.row(InlineKeyboardButton(
-        text="◀️ Назад",
-        callback_data="admin_action:main",
-        icon_custom_emoji_id="5807862477974674485"
+        text="Назад",
+        callback_data="admin_section:promo_marketing",
+        icon_custom_emoji_id="5807679830195444280"
     ))
 
     try:
@@ -87,7 +87,11 @@ async def bulk_days_target_handler(callback: types.CallbackQuery,
     label = "всем пользователям" if target == "all" else "только активным подписчикам"
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_action:bulk_days"))
+    builder.row(InlineKeyboardButton(
+        text="Назад",
+        callback_data="admin_action:bulk_days",
+        icon_custom_emoji_id="5807679830195444280"
+    ))
 
     try:
         await callback.message.edit_text(
@@ -127,10 +131,15 @@ async def bulk_days_count_handler(message: types.Message,
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
-        text=f"✅ Подтвердить — начислить {days} дней",
-        callback_data="bulk_days_confirm:yes"
+        text=f"Подтвердить — начислить {days} дней",
+        callback_data="bulk_days_confirm:yes",
+        icon_custom_emoji_id="6026349903863619779"
     ))
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="admin_action:bulk_days"))
+    builder.row(InlineKeyboardButton(
+        text="Отмена",
+        callback_data="admin_action:bulk_days",
+        icon_custom_emoji_id="5807692706507399432"
+    ))
 
     await message.answer(
         f"⚠️ <b>Подтверждение</b>\n\n"
@@ -202,7 +211,11 @@ async def bulk_days_confirm_handler(callback: types.CallbackQuery,
 
     label = "активным подписчикам" if target == "active" else "всем пользователям"
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_action:main"))
+    builder.row(InlineKeyboardButton(
+        text="Назад",
+        callback_data="admin_section:promo_marketing",
+        icon_custom_emoji_id="5807679830195444280"
+    ))
 
     try:
         await callback.message.edit_text(
