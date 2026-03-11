@@ -14,6 +14,7 @@ from bot.keyboards.inline.user_keyboards import (
     get_subscription_options_keyboard,
     get_back_to_main_menu_markup,
     get_autorenew_confirm_keyboard,
+    get_plan_selection_keyboard,
 )
 from bot.services.subscription_service import SubscriptionService
 from bot.services.panel_api_service import PanelApiService
@@ -46,6 +47,7 @@ async def display_subscription_options(
     settings: Settings,
     session: AsyncSession,
     promo_code_service=None,
+    selected_plan: str = None,
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -63,23 +65,34 @@ async def display_subscription_options(
             await event.answer(err_msg)
         return
 
-    currency_symbol_val = "RUB"
-    traffic_packages = getattr(settings, "traffic_packages", {}) or {}
-    stars_traffic_packages = getattr(settings, "stars_traffic_packages", {}) or {}
-    traffic_mode = bool(getattr(settings, "traffic_sale_mode", False) or stars_traffic_packages)
+    target_message_obj = event.message if isinstance(event, types.CallbackQuery) else event
+    if not target_message_obj:
+        if isinstance(event, types.CallbackQuery):
+            try:
+                await event.answer(get_text("error_occurred_try_again"), show_alert=True)
+            except Exception as exc:
+                logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
+        return
 
-    options_are_stars = False
-    if traffic_mode:
-        if traffic_packages:
-            options = traffic_packages
-        elif stars_traffic_packages:
-            options = stars_traffic_packages
-            currency_symbol_val = "⭐"
-            options_are_stars = True
+    # If no plan selected yet — show plan selection screen
+    if not selected_plan:
+        plan_text = "🗂 <b>Выберите тариф:</b>\n\n🔵 <b>Стандартный</b> — до 2 устройств\n👨‍👩‍👧‍👦 <b>Семейный</b> — до 10 устройств\n🏢 <b>Корпоративный</b> — до 50 устройств"
+        reply_markup = get_plan_selection_keyboard(current_lang, i18n)
+        if isinstance(event, types.CallbackQuery):
+            try:
+                await target_message_obj.edit_text(plan_text, reply_markup=reply_markup, parse_mode="HTML")
+            except Exception:
+                await target_message_obj.answer(plan_text, reply_markup=reply_markup, parse_mode="HTML")
+            try:
+                await event.answer()
+            except Exception as exc:
+                logging.debug("Suppressed exception: %s", exc)
         else:
-            options = {}
-    else:
-        options = settings.subscription_options
+            await target_message_obj.answer(plan_text, reply_markup=reply_markup, parse_mode="HTML")
+        return
+
+    currency_symbol_val = "RUB"
+    options = settings.subscription_options
 
     display_options = options
     if options and promo_code_service:
@@ -99,40 +112,52 @@ async def display_subscription_options(
                     discounted_price, _ = promo_code_service.calculate_discounted_price(
                         price, discount_pct
                     )
-                    if options_are_stars:
-                        discounted_price = math.ceil(discounted_price)
                     discounted_options[period] = discounted_price
             display_options = discounted_options
 
+    plan_labels = {
+        "standard": "🔵 Стандартный (2 устройства)",
+        "family": "👨‍👩‍👧‍👦 Семейный (10 устройств)",
+        "corporate": "🏢 Корпоративный (50 устройств)",
+    }
+    plan_label = plan_labels.get(selected_plan, selected_plan)
+
     if display_options:
-        text_content = get_text("select_traffic_package") if traffic_mode else get_text("select_subscription_period")
+        text_content = f"📅 <b>Тариф: {plan_label}</b>\n\nВыберите период подписки:"
         reply_markup = get_subscription_options_keyboard(
-            display_options, currency_symbol_val, current_lang, i18n, traffic_mode=traffic_mode
+            display_options, currency_symbol_val, current_lang, i18n, plan=selected_plan
         )
     else:
         text_content = get_text("no_subscription_options_available")
         reply_markup = get_back_to_main_menu_markup(current_lang, i18n)
 
-    target_message_obj = event.message if isinstance(event, types.CallbackQuery) else event
-    if not target_message_obj:
-        if isinstance(event, types.CallbackQuery):
-            try:
-                await event.answer(get_text("error_occurred_try_again"), show_alert=True)
-            except Exception as exc:
-                logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        return
-
     if isinstance(event, types.CallbackQuery):
         try:
-            await target_message_obj.edit_text(text_content, reply_markup=reply_markup)
+            await target_message_obj.edit_text(text_content, reply_markup=reply_markup, parse_mode="HTML")
         except Exception:
-            await target_message_obj.answer(text_content, reply_markup=reply_markup)
+            await target_message_obj.answer(text_content, reply_markup=reply_markup, parse_mode="HTML")
         try:
             await event.answer()
         except Exception as exc:
             logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     else:
-        await target_message_obj.answer(text_content, reply_markup=reply_markup)
+        await target_message_obj.answer(text_content, reply_markup=reply_markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("plan:"))
+async def plan_selected_callback(
+    callback: types.CallbackQuery,
+    i18n_data: dict,
+    settings: Settings,
+    session: AsyncSession,
+    promo_code_service=None,
+):
+    plan = callback.data.split(":")[1]
+    await display_subscription_options(
+        callback, i18n_data, settings, session,
+        promo_code_service=promo_code_service,
+        selected_plan=plan,
+    )
 
 
 @router.callback_query(F.data == "main_action:subscribe")
@@ -198,53 +223,17 @@ async def my_subscription_command_handler(
 
     end_date = active.get("end_date")
     days_left = (end_date.date() - datetime.now().date()).days if end_date else 0
-    traffic_mode = bool(getattr(settings, "traffic_sale_mode", False))
     config_link_display = active.get("config_link")
     connect_button_url = active.get("connect_button_url")
     config_link_value = config_link_display or get_text("config_link_not_available")
-    def _fmt_gb(val: Optional[float]) -> str:
-        if val is None:
-            return get_text("traffic_na")
-        try:
-            if isinstance(val, (int, float)):
-                val_gb = float(val) / (2**30)
-                return f"{val_gb:.2f} GB"
-        except Exception as exc:
-            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        return str(val)
 
-    if traffic_mode:
-        limit_display = _fmt_gb(active.get("traffic_limit_bytes"))
-        used_display = _fmt_gb(active.get("traffic_used_bytes"))
-        remaining_display = get_text("traffic_na")
-        try:
-            limit_val = active.get("traffic_limit_bytes") or 0
-            used_val = active.get("traffic_used_bytes") or 0
-            remaining_val = max(0, float(limit_val) - float(used_val))
-            remaining_display = _fmt_gb(remaining_val)
-        except Exception as exc:
-            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        text = get_text(
-            "my_traffic_details",
-            status=active.get("status_from_panel", get_text("status_active")).capitalize(),
-            end_date=end_date.strftime("%Y-%m-%d") if end_date else get_text("traffic_no_expiry"),
-            traffic_limit=limit_display,
-            traffic_used=used_display,
-            traffic_left=remaining_display,
-            config_link=config_link_value,
-        )
-    else:
-        text = get_text(
-            "my_subscription_details",
-            end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
-            days_left=max(0, days_left),
-            status=active.get("status_from_panel", get_text("status_active")).capitalize(),
-            config_link=config_link_value,
-            traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
-            traffic_used=(
-                f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
-            ),
-        )
+    text = get_text(
+        "my_subscription_details",
+        end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
+        days_left=max(0, days_left),
+        status=active.get("status_from_panel", get_text("status_active")).capitalize(),
+        config_link=config_link_value,
+    )
 
     base_markup = get_back_to_main_menu_markup(current_lang, i18n)
     kb = base_markup.inline_keyboard
@@ -323,7 +312,7 @@ async def my_subscription_command_handler(
             ])
 
         # 2) Auto-renew toggle (YooKassa only)
-        if not traffic_mode and local_sub and local_sub.provider == "yookassa" and settings.yookassa_autopayments_active:
+        if local_sub and local_sub.provider == "yookassa" and settings.yookassa_autopayments_active:
             toggle_text = (
                 get_text("autorenew_disable_button") if local_sub.auto_renew_enabled else get_text("autorenew_enable_button")
             )
@@ -335,7 +324,7 @@ async def my_subscription_command_handler(
             ])
 
         # 3) Payment methods management (when autopayments enabled)
-        if not traffic_mode and settings.yookassa_autopayments_active:
+        if settings.yookassa_autopayments_active:
             prepend_rows.append([
                 InlineKeyboardButton(text=get_text("payment_methods_manage_button"), callback_data="pm:manage")
             ])
