@@ -61,11 +61,10 @@ async def select_subscription_period_callback_handler(
             logging.debug("Suppressed exception in bot/handlers/user/subscription/payments_subscription.py: %s", exc)
         return
 
-    traffic_packages = getattr(settings, "traffic_packages", {}) or {}
-    stars_traffic_packages = getattr(settings, "stars_traffic_packages", {}) or {}
-    traffic_mode = bool(getattr(settings, "traffic_sale_mode", False) or stars_traffic_packages)
+    # Parse: subscribe_period:{months} or subscribe_period:{months}:{plan}
+    parts = callback.data.split(":")
     try:
-        months = float(callback.data.split(":")[-1])
+        months = float(parts[1])
     except (ValueError, IndexError):
         logging.error(f"Invalid subscription period in callback_data: {callback.data}")
         try:
@@ -74,11 +73,29 @@ async def select_subscription_period_callback_handler(
             logging.debug("Suppressed exception in bot/handlers/user/subscription/payments_subscription.py: %s", exc)
         return
 
-    price_source = traffic_packages if traffic_mode else settings.subscription_options
-    stars_price_source = stars_traffic_packages if traffic_mode else settings.stars_subscription_options
+    # Extract optional plan
+    selected_plan = parts[2] if len(parts) > 2 else None
+    PLAN_DEVICE_LIMITS = {
+        "standard": 2,
+        "family": 10,
+        "corporate": 50,
+    }
+    plan_device_limit = PLAN_DEVICE_LIMITS.get(selected_plan) if selected_plan else None
+
+    # Store plan device limit in callback message bot_data via FSMContext workaround
+    # We pass it via a global dict keyed by user_id (cleared on use)
+    if not hasattr(settings, "_plan_device_limits"):
+        settings._plan_device_limits = {}
+    if plan_device_limit is not None:
+        settings._plan_device_limits[callback.from_user.id] = plan_device_limit
+    else:
+        settings._plan_device_limits.pop(callback.from_user.id, None)
+
+    price_source = settings.subscription_options
+    stars_price_source = settings.stars_subscription_options if hasattr(settings, "stars_subscription_options") else {}
 
     price_rub = price_source.get(months)
-    stars_price = stars_price_source.get(months)
+    stars_price = stars_price_source.get(months) if stars_price_source else None
     currency_symbol_val = "RUB"
 
     # Check for active discount and apply if exists
@@ -105,6 +122,7 @@ async def select_subscription_period_callback_handler(
                     currency_symbol=currency_symbol_val,
                 )
             if stars_price is not None:
+                import math
                 original_stars_price = stars_price
                 discounted_stars_price, _ = promo_code_service.calculate_discounted_price(
                     float(stars_price), discount_pct
@@ -124,39 +142,24 @@ async def select_subscription_period_callback_handler(
                     )
 
     if price_rub is None:
-        if traffic_mode and not price_source and stars_price is not None:
-            currency_methods_enabled = any(
-                [
-                    settings.FREEKASSA_ENABLED,
-                    settings.PLATEGA_ENABLED,
-                    settings.SEVERPAY_ENABLED,
-                    settings.YOOKASSA_ENABLED,
-                    settings.CRYPTOPAY_ENABLED,
-                ]
-            )
-            if currency_methods_enabled:
-                logging.error(
-                    "Currency price missing for traffic option %s while fiat providers are enabled.",
-                    months,
-                )
-                try:
-                    await callback.answer(get_text("error_try_again"), show_alert=True)
-                except Exception as exc:
-                    logging.debug("Suppressed exception in bot/handlers/user/subscription/payments_subscription.py: %s", exc)
-                return
-            price_rub = 0.0
-            currency_symbol_val = "⭐"
-        else:
-            logging.error(
-                f"Price not found for option {months} using {'traffic_packages' if traffic_mode else 'subscription_options'}."
-            )
-            try:
-                await callback.answer(get_text("error_try_again"), show_alert=True)
-            except Exception as exc:
-                logging.debug("Suppressed exception in bot/handlers/user/subscription/payments_subscription.py: %s", exc)
-            return
+        logging.error(
+            f"Price not found for option {months} using subscription_options."
+        )
+        try:
+            await callback.answer(get_text("error_try_again"), show_alert=True)
+        except Exception as exc:
+            logging.debug("Suppressed exception in bot/handlers/user/subscription/payments_subscription.py: %s", exc)
+        return
 
-    text_content = get_text("choose_payment_method_traffic") if traffic_mode else get_text("choose_payment_method")
+    plan_labels = {
+        "standard": "🔵 Стандартный (2 устройства)",
+        "family": "👨‍👩‍👧‍👦 Семейный (10 устройств)",
+        "corporate": "🏢 Корпоративный (50 устройств)",
+    }
+    plan_label = plan_labels.get(selected_plan, "") if selected_plan else ""
+    plan_note = f"\n\n📋 <b>Тариф: {plan_label}</b>" if plan_label else ""
+
+    text_content = get_text("choose_payment_method") + plan_note
     if discount_text:
         text_content = f"{discount_text}\n\n{text_content}"
 
@@ -168,16 +171,16 @@ async def select_subscription_period_callback_handler(
         current_lang,
         i18n,
         settings,
-        sale_mode="traffic" if traffic_mode else "subscription",
+        sale_mode="subscription",
     )
 
     try:
-        await callback.message.edit_text(text_content, reply_markup=reply_markup)
+        await callback.message.edit_text(text_content, reply_markup=reply_markup, parse_mode="HTML")
     except Exception as e_edit:
         logging.warning(
             f"Edit message for payment method selection failed: {e_edit}. Sending new one."
         )
-        await callback.message.answer(text_content, reply_markup=reply_markup)
+        await callback.message.answer(text_content, reply_markup=reply_markup, parse_mode="HTML")
     try:
         await callback.answer()
     except Exception as exc:
