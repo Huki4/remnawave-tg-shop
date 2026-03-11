@@ -544,6 +544,7 @@ class SubscriptionService:
         provider: str = "yookassa",
         sale_mode: str = "subscription",
         traffic_gb: Optional[float] = None,
+        hwid_device_limit: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
 
         if sale_mode == "traffic" or getattr(self.settings, "traffic_sale_mode", False):
@@ -668,6 +669,7 @@ class SubscriptionService:
             expire_at=final_end_date,
             status="ACTIVE",
             traffic_limit_bytes=self.settings.user_traffic_limit_bytes,
+            hwid_device_limit=hwid_device_limit,
         )
 
         # Add user description based on Telegram profile
@@ -1080,6 +1082,7 @@ class SubscriptionService:
         traffic_limit_bytes: Optional[int] = None,
         include_uuid: bool = True,
         traffic_limit_strategy: Optional[str] = None,
+        hwid_device_limit: Optional[int] = None,
     ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {}
         if include_uuid and panel_user_uuid:
@@ -1091,6 +1094,8 @@ class SubscriptionService:
         if traffic_limit_bytes is not None:
             payload["trafficLimitBytes"] = traffic_limit_bytes
             payload["trafficLimitStrategy"] = traffic_limit_strategy or self.settings.USER_TRAFFIC_STRATEGY
+        if hwid_device_limit is not None:
+            payload["hwidDeviceLimit"] = hwid_device_limit
         if self.settings.parsed_user_squad_uuids:
             payload["activeInternalSquads"] = self.settings.parsed_user_squad_uuids
         if self.settings.parsed_user_external_squad_uuid:
