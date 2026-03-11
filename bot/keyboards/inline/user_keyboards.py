@@ -189,7 +189,8 @@ def get_my_subscription_keyboard(
 def get_subscription_options_keyboard(
         subscription_options: list, currency_symbol: str,
         lang: str, i18n_instance,
-        promo_discount_pct: int = 0, traffic_mode: bool = False) -> InlineKeyboardMarkup:
+        promo_discount_pct: int = 0, traffic_mode: bool = False,
+        plan: str = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     currency = currency_symbol or '₽'
 
@@ -200,16 +201,41 @@ def get_subscription_options_keyboard(
     for period, price in items:
         if price is None:
             continue
-        if traffic_mode:
-            label = f"{period} ГБ — {price} {currency}"
-            cb = f"sub:select_traffic:{period}"
+        label = f"{period} мес. — {price} {currency}"
+        # Use existing subscribe_period handler, append plan if present
+        if plan:
+            cb = f"subscribe_period:{period}:{plan}"
         else:
-            label = f"{period} мес. — {price} {currency}"
-            cb = f"sub:select_period:{period}"
+            cb = f"subscribe_period:{period}"
         builder.button(text=label, callback_data=cb)
 
-    builder.row(_back())
+    if plan:
+        builder.row(_back(cb="main_action:subscribe"))
+    else:
+        builder.row(_back())
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_plan_selection_keyboard(lang: str, i18n_instance) -> InlineKeyboardMarkup:
+    """Keyboard to select a subscription plan (Standard/Family/Corporate)."""
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="🔵 Стандартный (2 устройства)",
+        callback_data="plan:standard",
+        icon_custom_emoji_id=BUTTONS["plan_standard"]["icon"]
+    ))
+    builder.row(InlineKeyboardButton(
+        text="👨‍👩‍👧‍👦 Семейный (10 устройств)",
+        callback_data="plan:family",
+        icon_custom_emoji_id=BUTTONS["plan_family"]["icon"]
+    ))
+    builder.row(InlineKeyboardButton(
+        text="🏢 Корпоративный (50 устройств)",
+        callback_data="plan:corporate",
+        icon_custom_emoji_id=BUTTONS["plan_corp"]["icon"]
+    ))
+    builder.row(_back())
     return builder.as_markup()
 
 
@@ -565,21 +591,30 @@ def get_back_to_payment_methods_keyboard(lang: str,
 
 def get_referral_link_keyboard(lang: str, i18n_instance,
                                 referral_link: str) -> InlineKeyboardMarkup:
-    """Кнопка поделиться реферальной ссылкой."""
+    """Кнопка поделиться реферальной ссылкой + генерация QR-кода."""
     builder = InlineKeyboardBuilder()
+    import urllib.parse
     share_text = f"Присоединяйся к Denver VPN: {referral_link}"
     builder.row(InlineKeyboardButton(
         text="📤 Поделиться ссылкой",
-        url=f"https://t.me/share/url?url={referral_link}&text={share_text}",
+        url=f"https://t.me/share/url?url={urllib.parse.quote(referral_link)}&text={urllib.parse.quote(share_text)}",
+        icon_custom_emoji_id=BUTTONS["referral"]["icon"]
+    ))
+    builder.row(InlineKeyboardButton(
+        text="📷 Генерация QR-кода",
+        callback_data="referral_action:generate_qr",
         icon_custom_emoji_id=BUTTONS["referral"]["icon"]
     ))
     builder.row(_back())
     return builder.as_markup()
 
 
-def get_autorenew_confirm_keyboard(lang: str, i18n_instance, payment_method_id: str = None) -> InlineKeyboardMarkup:
+def get_autorenew_confirm_keyboard(enable: bool, sub_id: int, lang: str, i18n_instance) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="Включить автопродление", callback_data=f"autopay:confirm:{payment_method_id or ''}"))
+    if enable:
+        builder.row(InlineKeyboardButton(text="✅ Да, включить", callback_data=f"autorenew:confirm:{sub_id}:1"))
+    else:
+        builder.row(InlineKeyboardButton(text="✅ Да, отключить", callback_data=f"autorenew:confirm:{sub_id}:0"))
     builder.row(InlineKeyboardButton(text="Отмена", callback_data="main_action:my_subscription"))
     return builder.as_markup()
 
