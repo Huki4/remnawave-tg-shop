@@ -138,6 +138,10 @@ async def admin_panel_actions_callback_handler(
         await callback.answer(_("admin_sync_initiated_from_panel"))
     elif action == "queue_status":
         await show_queue_status_handler(callback, i18n_data)
+    elif action == "all_transactions":
+        from . import payments as admin_payments_handlers
+        await admin_payments_handlers.view_payments_handler(
+            callback, i18n_data, settings, session)
     elif action == "view_payments":
         from . import payments as admin_payments_handlers
         await admin_payments_handlers.view_payments_handler(
@@ -152,6 +156,7 @@ async def admin_panel_actions_callback_handler(
         from . import ads as admin_ads_handlers
         await admin_ads_handlers.ads_create_start(callback, state, settings, i18n_data)
     elif action == "main":
+        await state.clear()
         try:
             await callback.message.edit_text(
                 _(key="admin_panel_title"),
@@ -184,6 +189,8 @@ async def admin_section_handler(callback: types.CallbackQuery, state: FSMContext
     if not callback.message:
         await callback.answer("Error: message context lost.", show_alert=True)
         return
+
+    await state.clear()
 
     try:
         if section == "stats_monitoring":
