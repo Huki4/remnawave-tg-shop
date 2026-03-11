@@ -1347,3 +1347,73 @@ async def user_card_from_list_handler(callback: types.CallbackQuery,
     except Exception as e:
         logging.error(f"Error displaying user card: {e}")
         await callback.answer("Error displaying user card", show_alert=True)
+
+
+async def view_payments_handler(
+    callback: types.CallbackQuery,
+    i18n_data: dict,
+    settings: Settings,
+    session: AsyncSession,
+    page: int = 0,
+):
+    """Display paginated list of successful transactions in admin panel."""
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    if not i18n or not callback.message:
+        await callback.answer("Error preparing transactions.", show_alert=True)
+        return
+    _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
+
+    PAGE_SIZE = 10
+    try:
+        from db.dal import payment_dal as _payment_dal
+        payments = await _payment_dal.get_recent_payment_logs_with_user(
+            session, limit=PAGE_SIZE, offset=page * PAGE_SIZE
+        )
+        total = await _payment_dal.get_payments_count(session)
+        total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+
+        if not payments:
+            text = "📋 <b>Транзакции</b>\n\nНет успешных транзакций."
+        else:
+            lines = [f"📋 <b>Транзакции</b> (стр. {page + 1}/{total_pages}, всего: {total})\n"]
+            for p in payments:
+                user_info = ""
+                if p.user:
+                    uname = f"@{p.user.username}" if p.user.username else str(p.user.user_id)
+                    user_info = f" · {hcode(uname)}"
+                ts = p.created_at.strftime("%d.%m.%Y %H:%M") if p.created_at else "?"
+                amount_str = f"{p.amount:.2f} {p.currency or 'RUB'}" if p.amount else "?"
+                provider = p.provider or "?"
+                lines.append(
+                    f"• {hcode(ts)}{user_info}\n"
+                    f"  💰 {amount_str} · {hcode(provider)}"
+                )
+            text = "\n\n".join(lines)
+
+        # Build pagination keyboard
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        builder = InlineKeyboardBuilder()
+        row = []
+        if page > 0:
+            row.append(InlineKeyboardButton(
+                text="⬅️", callback_data=f"admin_txn:page:{page - 1}"
+            ))
+        if page < total_pages - 1:
+            row.append(InlineKeyboardButton(
+                text="➡️", callback_data=f"admin_txn:page:{page + 1}"
+            ))
+        if row:
+            builder.row(*row)
+        builder.row(InlineKeyboardButton(
+            text="Назад",
+            callback_data="admin_section:stats_monitoring",
+            icon_custom_emoji_id="5807679830195444280"
+        ))
+
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await callback.answer()
+
+    except Exception as e:
+        logging.error(f"Error displaying transactions: {e}", exc_info=True)
+        await callback.answer("Ошибка загрузки транзакций", show_alert=True)
