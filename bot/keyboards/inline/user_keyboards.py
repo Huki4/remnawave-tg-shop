@@ -43,7 +43,7 @@ BUTTONS: dict = {
     "pay_severpay":  {"text": "SeverPay",              "style": None,      "icon": "6030443364178992166"},
     # ── Настройки ────────────────────────────────────────
     "bind_email":    {"text": "Привязать почту",       "style": None,      "icon": "6019263620142078168"},
-    "promo_inline":  {"text": "Активировать промокод", "style": None,      "icon": "5807681883189812861"},
+    "promo_inline":  {"text": "Промокод", "style": None,      "icon": "5807681883189812861"},
     "language":      {"text": "Язык",                  "style": None,      "icon": "6021582331251268218"},
     "support":       {"text": "Поддержка",             "style": None,      "icon": "5807800879553715710"},
     "status":        {"text": "Статус серверов",       "style": None,      "icon": "6023589944994306428"},
@@ -97,10 +97,10 @@ def get_main_menu_inline_keyboard(
     # Оплата — главная кнопка (primary, на всю ширину)
     builder.row(_btn("buy", cb="main_action:subscribe"))
 
-    # Информация + Цены
+    # Информация + Промокод
     builder.row(
-        _btn("info",   cb="main_action:info"),
-        _btn("prices", cb="main_action:prices"),
+        _btn("info",        cb="main_action:info"),
+        _btn("promo_inline", cb="main_action:prices"),
     )
 
     # Рефералы + Транзакции
@@ -189,21 +189,26 @@ def get_my_subscription_keyboard(
 # ════════════════════════════════════════════════════════
 
 def get_subscription_options_keyboard(
-        lang: str, i18n_instance, settings: Settings,
-        subscription_options: list,
-        promo_discount_pct: int = 0) -> InlineKeyboardMarkup:
+        subscription_options: list, currency_symbol: str,
+        lang: str, i18n_instance,
+        promo_discount_pct: int = 0, traffic_mode: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    currency = getattr(settings, 'CURRENCY_SYMBOL', '₽')
+    currency = currency_symbol or '₽'
 
-    for option in subscription_options:
-        months = option.get("months")
-        price = option.get("price", 0)
-        if promo_discount_pct > 0:
-            discounted = round(price * (1 - promo_discount_pct / 100))
-            label = f"{months} мес. — {discounted} {currency} (-{promo_discount_pct}%)"
+    if isinstance(subscription_options, dict):
+        items = list(subscription_options.items())
+    else:
+        items = [(o.get("months"), o.get("price", 0)) for o in subscription_options]
+    for period, price in items:
+        if price is None:
+            continue
+        if traffic_mode:
+            label = f"{period} ГБ — {price} {currency}"
+            cb = f"sub:select_traffic:{period}"
         else:
-            label = f"{months} мес. — {price} {currency}"
-        builder.button(text=label, callback_data=f"sub:select_period:{months}")
+            label = f"{period} мес. — {price} {currency}"
+            cb = f"sub:select_period:{period}"
+        builder.button(text=label, callback_data=cb)
 
     builder.row(_back())
     builder.adjust(1)
@@ -306,7 +311,7 @@ def get_gift_main_keyboard(lang: str, i18n_instance) -> InlineKeyboardMarkup:
 def get_gift_months_keyboard(lang: str, i18n_instance,
                               settings: Settings) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    currency = getattr(settings, 'CURRENCY_SYMBOL', '₽')
+    currency = currency_symbol or '₽'
     for months in [1, 3, 6, 12]:
         price = settings.subscription_options.get(months, 0)
         builder.button(text=f"{months} мес. — {price} {currency}",
@@ -323,9 +328,7 @@ def get_gift_months_keyboard(lang: str, i18n_instance,
 def get_settings_keyboard(lang: str, i18n_instance,
                             settings: Settings) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.row(_btn("bind_email",   cb="settings:bind_email"))
-    builder.row(_btn("promo_inline", cb="main_action:apply_promo"))
-    builder.row(_btn("language",     cb="main_action:language"))
+    builder.row(_btn("language", cb="main_action:language"))
     builder.row(_back())
     return builder.as_markup()
 
@@ -676,13 +679,6 @@ def get_payment_methods_manage_keyboard(lang: str, i18n_instance, has_card: bool
 def get_back_to_payment_methods_keyboard(lang: str, i18n_instance) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="Назад", callback_data="main_action:subscribe"))
-    return builder.as_markup()
-
-
-def get_referral_link_keyboard(lang: str, i18n_instance, referral_link: str) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="Поделиться ссылкой", url=f"https://t.me/share/url?url={referral_link}"))
-    builder.row(InlineKeyboardButton(text="Назад", callback_data="main_action:main"))
     return builder.as_markup()
 
 
