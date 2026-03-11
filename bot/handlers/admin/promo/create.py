@@ -38,19 +38,22 @@ async def create_promo_prompt_handler(callback: types.CallbackQuery,
     builder.row(
         InlineKeyboardButton(
             text=_("admin_promo_type_bonus_days"),
-            callback_data="promo_type_select:bonus_days"
+            callback_data="promo_type_select:bonus_days",
+            icon_custom_emoji_id="6023826881160157558"
         )
     )
     builder.row(
         InlineKeyboardButton(
             text=_("admin_promo_type_discount"),
-            callback_data="promo_type_select:discount"
+            callback_data="promo_type_select:discount",
+            icon_custom_emoji_id="6021405408663445899"
         )
     )
     builder.row(
         InlineKeyboardButton(
-            text=_("admin_back_to_panel"),
-            callback_data="admin_action:main"
+            text="Назад",
+            callback_data="admin_section:promo_marketing",
+            icon_custom_emoji_id="5807679830195444280"
         )
     )
 
@@ -289,20 +292,23 @@ async def process_promo_max_activations_handler(message: types.Message,
         builder = InlineKeyboardBuilder()
         builder.row(
             InlineKeyboardButton(
-                text="👥 Для всех пользователей",
-                callback_data="promo_target_select:all"
+                text="Для всех пользователей",
+                callback_data="promo_target_select:all",
+                icon_custom_emoji_id="6021690418398239007"
             )
         )
         builder.row(
             InlineKeyboardButton(
-                text="✅ Только активные подписчики",
-                callback_data="promo_target_select:active"
+                text="Только активные подписчики",
+                callback_data="promo_target_select:active",
+                icon_custom_emoji_id="6026349903863619779"
             )
         )
         builder.row(
             InlineKeyboardButton(
-                text=_("admin_back_to_panel"),
-                callback_data="admin_action:main"
+                text="Назад",
+                callback_data="admin_section:promo_marketing",
+                icon_custom_emoji_id="5807679830195444280"
             )
         )
         await message.answer(
@@ -337,19 +343,22 @@ async def process_promo_max_activations_handler(message: types.Message,
         builder.row(
             InlineKeyboardButton(
                 text=_("admin_promo_unlimited_validity"),
-                callback_data="promo_unlimited_validity"
+                callback_data="promo_unlimited_validity",
+                icon_custom_emoji_id="6021650913289050282"
             )
         )
         builder.row(
             InlineKeyboardButton(
                 text=_("admin_promo_set_validity_days"),
-                callback_data="promo_set_validity"
+                callback_data="promo_set_validity",
+                icon_custom_emoji_id="5807485774983077261"
             )
         )
         builder.row(
             InlineKeyboardButton(
-                text=_("admin_back_to_panel"),
-                callback_data="admin_action:main"
+                text="Назад",
+                callback_data="admin_section:promo_marketing",
+                icon_custom_emoji_id="5807679830195444280"
             )
         )
         
@@ -404,9 +413,9 @@ async def process_promo_target_audience(callback: types.CallbackQuery,
         )
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=_("admin_promo_unlimited_validity"), callback_data="promo_unlimited_validity"))
-    builder.row(InlineKeyboardButton(text=_("admin_promo_set_validity_days"), callback_data="promo_set_validity"))
-    builder.row(InlineKeyboardButton(text=_("admin_back_to_panel"), callback_data="admin_action:main"))
+    builder.row(InlineKeyboardButton(text=_("admin_promo_unlimited_validity"), callback_data="promo_unlimited_validity", icon_custom_emoji_id="6021650913289050282"))
+    builder.row(InlineKeyboardButton(text=_("admin_promo_set_validity_days"), callback_data="promo_set_validity", icon_custom_emoji_id="5807485774983077261"))
+    builder.row(InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280"))
 
     try:
         await callback.message.edit_text(prompt_text, reply_markup=builder.as_markup(), parse_mode="HTML")
