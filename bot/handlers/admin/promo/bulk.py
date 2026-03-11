@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import Settings
 from db.dal import promo_code_dal
 from bot.states.admin_states import AdminStates
-from bot.keyboards.inline.admin_keyboards import get_back_to_admin_panel_keyboard, get_admin_panel_keyboard
+from bot.keyboards.inline.admin_keyboards import get_admin_panel_keyboard
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from bot.middlewares.i18n import JsonI18n
 
@@ -40,14 +40,18 @@ async def create_bulk_promo_prompt_handler(callback: types.CallbackQuery,
     try:
         await callback.message.edit_text(
             prompt_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML")
     except Exception as e:
         logging.warning(
             f"Could not edit message for bulk promo prompt: {e}. Sending new.")
         await callback.message.answer(
             prompt_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML")
     await callback.answer()
     await state.set_state(AdminStates.waiting_for_bulk_promo_quantity)
@@ -90,7 +94,9 @@ async def process_bulk_promo_quantity_handler(message: types.Message,
         
         await message.answer(
             prompt_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML"
         )
         await state.set_state(AdminStates.waiting_for_bulk_promo_bonus_days)
@@ -137,7 +143,9 @@ async def process_bulk_promo_bonus_days_handler(message: types.Message,
         
         await message.answer(
             prompt_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML"
         )
         await state.set_state(AdminStates.waiting_for_bulk_promo_max_activations)
@@ -188,19 +196,22 @@ async def process_bulk_promo_max_activations_handler(message: types.Message,
         builder.row(
             InlineKeyboardButton(
                 text=_("admin_promo_unlimited_validity"),
-                callback_data="bulk_promo_unlimited_validity"
+                callback_data="bulk_promo_unlimited_validity",
+                icon_custom_emoji_id="6021650913289050282"  # ♾️
             )
         )
         builder.row(
             InlineKeyboardButton(
                 text=_("admin_promo_set_validity_days"),
-                callback_data="bulk_promo_set_validity"
+                callback_data="bulk_promo_set_validity",
+                icon_custom_emoji_id="5807485774983077261"  # 📅
             )
         )
         builder.row(
             InlineKeyboardButton(
-                text=_("admin_back_to_panel"),
-                callback_data="admin_action:main"
+                text="Назад",
+                callback_data="admin_section:promo_marketing",
+                icon_custom_emoji_id="5807679830195444280"  # ◀️
             )
         )
         
@@ -255,13 +266,17 @@ async def process_bulk_promo_set_validity(callback: types.CallbackQuery,
     try:
         await callback.message.edit_text(
             prompt_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML"
         )
     except Exception:
         await callback.message.answer(
             prompt_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
             parse_mode="HTML"
         )
     await callback.answer()
@@ -475,21 +490,27 @@ async def create_bulk_promo_codes_final(callback_or_message,
             try:
                 await callback_or_message.message.edit_text(
                     success_text,
-                    reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+                    reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
                     parse_mode="HTML"
                 )
                 message_obj = callback_or_message.message
             except Exception:
                 message_obj = await callback_or_message.message.answer(
                     success_text,
-                    reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+                    reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
                     parse_mode="HTML"
                 )
             await callback_or_message.answer()
         else:  # Message
             message_obj = await callback_or_message.answer(
                 success_text,
-                reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+                reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="Назад", callback_data="admin_section:promo_marketing", icon_custom_emoji_id="5807679830195444280")
+            ).as_markup(),
                 parse_mode="HTML"
             )
         
