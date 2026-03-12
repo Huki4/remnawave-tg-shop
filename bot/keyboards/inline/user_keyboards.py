@@ -2,97 +2,21 @@
 user_keyboards.py
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  НАСТРОЙКА КНОПОК — меняй только здесь:
-
-  BUTTONS — словарь всех кнопок.
-    "text" — текст кнопки (виден если нет премиум-эмодзи)
-    "emoji_id" — custom_emoji_id из @JsonDumpBot
-                 "" = без премиум-эмодзи
-
-  INFO_LINKS — ссылки раздела «Информация»
-
-  Как получить emoji_id:
-    1. Отправь эмодзи боту @JsonDumpBot
-    2. Скопируй поле custom_emoji_id
+  Для изменения кнопок и эмодзи — редактируй bot_config.py
+  (файл в корне проекта рядом с main.py)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config.settings import Settings
+from bot_config import PREMIUM_EMOJI, BUTTON_LABELS, INFO_LINKS
 
 
-# ════════════════════════════════════════════════════════
-#  КНОПКИ
-#  text     = текст кнопки
-#  emoji_id = custom_emoji_id (премиум) или "" без эмодзи
-# ════════════════════════════════════════════════════════
+# Собираем BUTTONS из bot_config (для обратной совместимости со всем кодом)
 BUTTONS: dict = {
-
-    # ── Главное меню ─────────────────────────────────────
-    "buy":           {"text": "Оплата",                       "emoji_id": "6030443364178992166"},
-    "vpn":           {"text": "Управление подпиской",         "emoji_id": "6023896773162967617"},
-    "info":          {"text": "Информация",                   "emoji_id": "5807800879553715710"},
-    "referral":      {"text": "Рефералы",                     "emoji_id": "6021690418398239007"},
-    "gifts":         {"text": "Подарки",                      "emoji_id": "6023826881160157558"},
-    "settings":      {"text": "Настройки",                    "emoji_id": "6021582331251268218"},
-    "back":          {"text": "◀️ Назад",                     "emoji_id": ""},
-    "trial":         {"text": "Пробный период",               "emoji_id": "6030462253445160459"},
-
-    # ── Тарифы ───────────────────────────────────────────
-    "plan_standard": {"text": "Стандартный тариф",            "emoji_id": "6024039683904772353"},
-    "plan_family":   {"text": "Семейный тариф",               "emoji_id": "6021690418398239007"},
-    "plan_corp":     {"text": "Корпоративный тариф",          "emoji_id": "6021650913289050282"},
-    "plan_gift":     {"text": "Подписка в подарок",           "emoji_id": "6023826881160157558"},
-
-    # ── Информация ───────────────────────────────────────
-    "info_channel":  {"text": "Канал",                        "emoji_id": ""},
-    "info_terms":    {"text": "Пользовательское соглашение",  "emoji_id": "6021413766669801212"},
-    "info_support":  {"text": "Техническая поддержка",        "emoji_id": "5807800879553715710"},
-    "info_privacy":  {"text": "Политика конфиденциальности",  "emoji_id": "6021413766669801212"},
-    "info_faq":      {"text": "FAQ",                          "emoji_id": "5807800879553715710"},
-
-    # ── Рефералы ─────────────────────────────────────────
-    "ref_share":     {"text": "Поделиться ссылкой",           "emoji_id": "6021690418398239007"},
-    "ref_qr":        {"text": "QR-код",                       "emoji_id": ""},
-
-    # ── Подарки ──────────────────────────────────────────
-    "gift_active":   {"text": "Активные подарки",             "emoji_id": ""},
-    "gift_inactive": {"text": "Использованные подарки",       "emoji_id": ""},
-    "gift_buy":      {"text": "Купить подарок",               "emoji_id": "6023826881160157558"},
-
-    # ── Управление подпиской ─────────────────────────────
-    "connect":       {"text": "Подключиться",                 "emoji_id": "6019290828759898301"},
-    "my_devices":    {"text": "Управление устройствами",      "emoji_id": "6026029580907715757"},
-    "sub_qr":        {"text": "QR-код подписки",              "emoji_id": ""},
-    "vpn_extend":    {"text": "Продлить подписку",            "emoji_id": "5807485774983077261"},
-
-    # ── Настройки ────────────────────────────────────────
-    "language":      {"text": "Сменить язык",                 "emoji_id": "6021582331251268218"},
-
-    # ── Методы оплаты ────────────────────────────────────
-    "pay_yookassa":  {"text": "ЮKassa",                       "emoji_id": "6030443364178992166"},
-    "pay_crypto":    {"text": "CryptoBot",                    "emoji_id": "6019290828759898301"},
-    "pay_stars":     {"text": "Звёзды Telegram",              "emoji_id": "6023826881160157558"},
-    "pay_freekassa": {"text": "FreeKassa",                    "emoji_id": "6030443364178992166"},
-    "pay_platega":   {"text": "Platega (СБП/карты)",          "emoji_id": "6030443364178992166"},
-    "pay_severpay":  {"text": "SeverPay",                     "emoji_id": "6030443364178992166"},
-
-    # ── Прочее ───────────────────────────────────────────
-    "cancel":        {"text": "Отмена",                       "emoji_id": ""},
-    "promo_inline":  {"text": "Промокод",                     "emoji_id": "5807681883189812861"},
-}
-
-
-# ════════════════════════════════════════════════════════
-#  ССЫЛКИ раздела «Информация» — вставь свои
-# ════════════════════════════════════════════════════════
-INFO_LINKS: dict = {
-    "channel":  "https://t.me/yourchannel",
-    "terms":    "https://example.com/terms",
-    "support":  "https://t.me/yoursupport",
-    "privacy":  "https://example.com/privacy",
-    "faq":      "https://example.com/faq",
+    key: {"text": BUTTON_LABELS.get(key, key), "emoji_id": PREMIUM_EMOJI.get(key, "")}
+    for key in set(list(BUTTON_LABELS.keys()) + list(PREMIUM_EMOJI.keys()))
 }
 
 
@@ -128,13 +52,13 @@ def get_main_menu_inline_keyboard(
     builder = InlineKeyboardBuilder()
     if show_trial_button and settings.TRIAL_ENABLED:
         builder.row(_btn("trial", cb="main_action:request_trial"))
-    builder.row(_btn("buy", cb="main_action:subscribe"))
+    builder.row(_btn("buy",      cb="main_action:subscribe"))
     builder.row(
-        _btn("info",     cb="main_action:info"),
         _btn("referral", cb="main_action:referral"),
+        _btn("gifts",    cb="main_action:gifts"),
     )
     builder.row(
-        _btn("gifts",    cb="main_action:gifts"),
+        _btn("info",     cb="main_action:info"),
         _btn("settings", cb="main_action:settings"),
     )
     builder.row(_btn("vpn", cb="main_action:my_subscription"))
@@ -197,22 +121,28 @@ def get_subscription_options_keyboard(
 
 def get_info_keyboard(lang: str, i18n_instance) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    # Канал — url (синий акцент)
-    builder.row(InlineKeyboardButton(
-        text=BUTTONS["info_channel"]["text"],
-        url=INFO_LINKS["channel"],
-        **({ "icon_custom_emoji_id": BUTTONS["info_channel"]["emoji_id"] }
-           if BUTTONS["info_channel"]["emoji_id"] else {}),
-    ))
-    for key, link_key in [
-        ("info_terms",   "terms"),
-        ("info_support", "support"),
-        ("info_privacy", "privacy"),
-        ("info_faq",     "faq"),
-    ]:
-        cfg = BUTTONS[key]
-        extra = {"icon_custom_emoji_id": cfg["emoji_id"]} if cfg["emoji_id"] else {}
-        builder.row(InlineKeyboardButton(text=cfg["text"], url=INFO_LINKS[link_key], **extra))
+    # Ярус 1: Канал (акцент) + FAQ
+    cfg_ch = BUTTONS["info_channel"]
+    extra_ch = {"icon_custom_emoji_id": cfg_ch["emoji_id"]} if cfg_ch["emoji_id"] else {}
+    cfg_faq = BUTTONS["info_faq"]
+    extra_faq = {"icon_custom_emoji_id": cfg_faq["emoji_id"]} if cfg_faq["emoji_id"] else {}
+    builder.row(
+        InlineKeyboardButton(text=cfg_ch["text"],  url=INFO_LINKS["channel"], **extra_ch),
+        InlineKeyboardButton(text=cfg_faq["text"], url=INFO_LINKS["faq"],     **extra_faq),
+    )
+    # Ярус 2: Соглашение + Политика
+    cfg_terms = BUTTONS["info_terms"]
+    extra_terms = {"icon_custom_emoji_id": cfg_terms["emoji_id"]} if cfg_terms["emoji_id"] else {}
+    cfg_priv = BUTTONS["info_privacy"]
+    extra_priv = {"icon_custom_emoji_id": cfg_priv["emoji_id"]} if cfg_priv["emoji_id"] else {}
+    builder.row(
+        InlineKeyboardButton(text=cfg_terms["text"], url=INFO_LINKS["terms"],   **extra_terms),
+        InlineKeyboardButton(text=cfg_priv["text"],  url=INFO_LINKS["privacy"], **extra_priv),
+    )
+    # Ярус 3: Техподдержка — большая акцентная кнопка
+    cfg_sup = BUTTONS["info_support"]
+    extra_sup = {"icon_custom_emoji_id": cfg_sup["emoji_id"]} if cfg_sup["emoji_id"] else {}
+    builder.row(InlineKeyboardButton(text=cfg_sup["text"], url=INFO_LINKS["support"], **extra_sup))
     builder.row(_back())
     return builder.as_markup()
 
@@ -389,9 +319,10 @@ def get_channel_subscription_keyboard(lang: str, i18n_instance,
 #  УНИВЕРСАЛЬНЫЕ
 # ════════════════════════════════════════════════════════
 
-def get_back_to_main_menu_markup(lang: str, i18n_instance) -> InlineKeyboardMarkup:
+def get_back_to_main_menu_markup(lang: str, i18n_instance,
+                                  callback_data: str = "main_action:back_to_main") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.row(_back())
+    builder.row(_back(cb=callback_data))
     return builder.as_markup()
 
 
