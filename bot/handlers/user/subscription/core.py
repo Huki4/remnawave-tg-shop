@@ -8,7 +8,7 @@ from typing import Optional, Union
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
+ 
 from config.settings import Settings
 from bot.keyboards.inline.user_keyboards import (
     get_subscription_options_keyboard,
@@ -21,10 +21,10 @@ from bot.services.panel_api_service import PanelApiService
 from bot.middlewares.i18n import JsonI18n
 from db.dal import subscription_dal, user_billing_dal
 from db.models import Subscription
-
+ 
 router = Router(name="user_subscription_core_router")
-
-
+ 
+ 
 def _shorten_hwid_for_display(hwid: Optional[str], max_length: int = 24) -> str:
     """Trim HWID for button text to keep within Telegram limits."""
     if not hwid:
@@ -33,14 +33,14 @@ def _shorten_hwid_for_display(hwid: Optional[str], max_length: int = 24) -> str:
     if len(hwid_str) <= max_length:
         return hwid_str
     return f"{hwid_str[:8]}...{hwid_str[-6:]}"
-
-
+ 
+ 
 def _hwid_callback_token(hwid: Optional[str]) -> str:
     """Stable short token for callback_data; avoids 64b limit with raw HWID."""
     hwid_str = str(hwid or "")
     return hashlib.sha256(hwid_str.encode()).hexdigest()[:32]
-
-
+ 
+ 
 async def display_subscription_options(
     event: Union[types.Message, types.CallbackQuery],
     i18n_data: dict,
@@ -51,9 +51,9 @@ async def display_subscription_options(
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
-
+ 
     get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
-
+ 
     if not i18n:
         err_msg = "Language service error."
         if isinstance(event, types.CallbackQuery):
@@ -64,7 +64,7 @@ async def display_subscription_options(
         elif isinstance(event, types.Message):
             await event.answer(err_msg)
         return
-
+ 
     target_message_obj = event.message if isinstance(event, types.CallbackQuery) else event
     if not target_message_obj:
         if isinstance(event, types.CallbackQuery):
@@ -73,7 +73,7 @@ async def display_subscription_options(
             except Exception as exc:
                 logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
-
+ 
     # If no plan selected yet — show plan selection screen
     if not selected_plan:
         plan_text = "🗂 <b>Выберите тариф:</b>\n\n🔵 <b>Стандартный</b> — до 2 устройств\n👨‍👩‍👧‍👦 <b>Семейный</b> — до 10 устройств\n🏢 <b>Корпоративный</b> — до 50 устройств"
@@ -90,10 +90,10 @@ async def display_subscription_options(
         else:
             await target_message_obj.answer(plan_text, reply_markup=reply_markup, parse_mode="HTML")
         return
-
+ 
     currency_symbol_val = "RUB"
     options = settings.subscription_options
-
+ 
     display_options = options
     if options and promo_code_service:
         try:
@@ -114,14 +114,14 @@ async def display_subscription_options(
                     )
                     discounted_options[period] = discounted_price
             display_options = discounted_options
-
+ 
     plan_labels = {
         "standard": "🔵 Стандартный (2 устройства)",
         "family": "👨‍👩‍👧‍👦 Семейный (10 устройств)",
         "corporate": "🏢 Корпоративный (50 устройств)",
     }
     plan_label = plan_labels.get(selected_plan, selected_plan)
-
+ 
     if display_options:
         text_content = f"📅 <b>Тариф: {plan_label}</b>\n\nВыберите период подписки:"
         reply_markup = get_subscription_options_keyboard(
@@ -130,7 +130,7 @@ async def display_subscription_options(
     else:
         text_content = get_text("no_subscription_options_available")
         reply_markup = get_back_to_main_menu_markup(current_lang, i18n)
-
+ 
     if isinstance(event, types.CallbackQuery):
         try:
             await target_message_obj.edit_text(text_content, reply_markup=reply_markup, parse_mode="HTML")
@@ -142,8 +142,8 @@ async def display_subscription_options(
             logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     else:
         await target_message_obj.answer(text_content, reply_markup=reply_markup, parse_mode="HTML")
-
-
+ 
+ 
 @router.callback_query(F.data.startswith("plan:"))
 async def plan_selected_callback(
     callback: types.CallbackQuery,
@@ -158,8 +158,8 @@ async def plan_selected_callback(
         promo_code_service=promo_code_service,
         selected_plan=plan,
     )
-
-
+ 
+ 
 @router.callback_query(F.data == "main_action:subscribe")
 async def reshow_subscription_options_callback(
     callback: types.CallbackQuery,
@@ -171,8 +171,8 @@ async def reshow_subscription_options_callback(
     await display_subscription_options(
         callback, i18n_data, settings, session, promo_code_service=promo_code_service
     )
-
-
+ 
+ 
 async def my_subscription_command_handler(
     event: Union[types.Message, types.CallbackQuery],
     i18n_data: dict,
@@ -186,28 +186,28 @@ async def my_subscription_command_handler(
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: JsonI18n = i18n_data.get("i18n_instance")
     get_text = lambda key, **kw: i18n.gettext(current_lang, key, **kw)
-
+ 
     if not i18n or not target:
         if isinstance(event, types.Message):
             await event.answer(get_text("error_occurred_try_again"))
         return
-
+ 
     if not panel_service or not subscription_service:
         await target.answer(get_text("error_service_unavailable"))
         return
-
+ 
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
-
+ 
     if not active:
         text = get_text("subscription_not_active")
-
+ 
         buy_button = InlineKeyboardButton(
             text=get_text("menu_subscribe_inline"), callback_data="main_action:subscribe"
         )
         back_markup = get_back_to_main_menu_markup(current_lang, i18n)
-
+ 
         kb = InlineKeyboardMarkup(inline_keyboard=[[buy_button], *back_markup.inline_keyboard])
-
+ 
         if isinstance(event, types.CallbackQuery):
             try:
                 await event.answer()
@@ -220,13 +220,13 @@ async def my_subscription_command_handler(
         else:
             await event.answer(text, reply_markup=kb)
         return
-
+ 
     end_date = active.get("end_date")
     days_left = (end_date.date() - datetime.now().date()).days if end_date else 0
     config_link_display = active.get("config_link")
     connect_button_url = active.get("connect_button_url")
     config_link_value = config_link_display or get_text("config_link_not_available")
-
+ 
     text = get_text(
         "my_subscription_details",
         end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
@@ -234,14 +234,14 @@ async def my_subscription_command_handler(
         status=active.get("status_from_panel", get_text("status_active")).capitalize(),
         config_link=config_link_value,
     )
-
+ 
     base_markup = get_back_to_main_menu_markup(current_lang, i18n)
     kb = base_markup.inline_keyboard
     try:
         local_sub = await subscription_dal.get_active_subscription_by_user_id(session, event.from_user.id)
         # Build rows to prepend above the base "back" markup
         prepend_rows = []
-
+ 
         # 1) Mini-app connect button on top if enabled, otherwise fall back to config link URL
         if settings.SUBSCRIPTION_MINI_APP_URL:
             prepend_rows.append([
@@ -259,7 +259,7 @@ async def my_subscription_command_handler(
                         url=cfg_link_val,
                     )
                 ])
-
+ 
         if settings.MY_DEVICES_SECTION_ENABLED:
             max_devices_value = active.get("max_devices")
             max_devices_display = get_text("devices_unlimited_label")
@@ -310,7 +310,7 @@ async def my_subscription_command_handler(
                     callback_data="main_action:my_devices",
                 )
             ])
-
+ 
         # 2) Auto-renew toggle (YooKassa only)
         if local_sub and local_sub.provider == "yookassa" and settings.yookassa_autopayments_active:
             toggle_text = (
@@ -322,19 +322,26 @@ async def my_subscription_command_handler(
                     callback_data=f"toggle_autorenew:{local_sub.subscription_id}:{1 if not local_sub.auto_renew_enabled else 0}",
                 )
             ])
-
+ 
         # 3) Payment methods management (when autopayments enabled)
         if settings.yookassa_autopayments_active:
             prepend_rows.append([
                 InlineKeyboardButton(text=get_text("payment_methods_manage_button"), callback_data="pm:manage")
             ])
-
+ 
+        # 4) QR-код подписки
+        cfg_link_for_qr = connect_button_url or config_link_display
+        if cfg_link_for_qr:
+            prepend_rows.append([
+                InlineKeyboardButton(text="📷 QR-код подписки", callback_data="sub_qr:generate")
+            ])
+ 
         if prepend_rows:
             kb = prepend_rows + kb
     except Exception as exc:
         logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
-
+ 
     if isinstance(event, types.CallbackQuery):
         try:
             await event.answer()
@@ -352,8 +359,8 @@ async def my_subscription_command_handler(
             )
     else:
         await target.answer(text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-
-
+ 
+ 
 @router.callback_query(F.data == "main_action:my_devices")
 async def my_devices_command_handler(
     event: Union[types.Message, types.CallbackQuery],
@@ -368,12 +375,12 @@ async def my_devices_command_handler(
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: JsonI18n = i18n_data.get("i18n_instance")
     get_text = lambda key, **kw: i18n.gettext(current_lang, key, **kw)
-
+ 
     if not i18n or not target:
         if isinstance(event, types.Message):
             await event.answer(get_text("error_occurred_try_again"))
         return
-
+ 
     if not settings.MY_DEVICES_SECTION_ENABLED:
         if isinstance(event, types.CallbackQuery):
             try:
@@ -383,7 +390,7 @@ async def my_devices_command_handler(
         else:
             await target.answer(get_text("my_devices_feature_disabled"))
         return
-
+ 
     # TODO: context?
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
     if not active or not active.get("user_id"):
@@ -396,7 +403,7 @@ async def my_devices_command_handler(
         else:
             await target.answer(message)
         return
-
+ 
     devices = await panel_service.get_user_devices(active.get("user_id")) if active else None
     if not devices:
         if isinstance(event, types.CallbackQuery):
@@ -407,13 +414,13 @@ async def my_devices_command_handler(
         else:
             await target.answer(get_text("no_devices_found"))
         return
-
+ 
     devices_list_raw = []
     if isinstance(devices, dict):
         devices_list_raw = devices.get("devices") or []
     elif isinstance(devices, list):
         devices_list_raw = devices
-
+ 
     max_devices_value = active.get("max_devices")
     max_devices_display = get_text("devices_unlimited_label")
     if max_devices_value not in (None, 0):
@@ -423,7 +430,7 @@ async def my_devices_command_handler(
                 max_devices_display = str(max_devices_int)
         except (TypeError, ValueError):
             max_devices_display = str(max_devices_value)
-
+ 
     if not devices_list_raw:
         text = get_text("no_devices_details_found_message", max_devices=max_devices_display)
     else:
@@ -440,15 +447,15 @@ async def my_devices_command_handler(
                 created_at_str = datetime.fromisoformat(created_at).strftime("%d.%m.%Y %H:%M") if created_at else "-"
             except Exception:
                 created_at_str = str(created_at)
-
+ 
             device_details = get_text("device_details", index=index, device_model=device_model, platform=platform, os_version=os_version, created_at_str=created_at_str, user_agent=user_agent, hwid=hwid)
             devices_list.append(device_details)
-
+ 
         text = get_text("my_devices_details", devices="\n\n".join(devices_list), current_devices=current_devices, max_devices=max_devices_display)
-
+ 
     base_markup = get_back_to_main_menu_markup(current_lang, i18n, callback_data="main_action:my_subscription")
     kb = base_markup.inline_keyboard
-
+ 
     devices_kb = []
     for index, device in enumerate(devices_list_raw, start=1):
         hwid = device.get('hwid')
@@ -456,11 +463,11 @@ async def my_devices_command_handler(
             continue
         device_button_text = get_text("disconnect_device_button", hwid=_shorten_hwid_for_display(hwid), index=index)
         hwid_token = _hwid_callback_token(hwid)
-
+ 
         devices_kb.append([InlineKeyboardButton(text=device_button_text, callback_data=f"disconnect_device:{hwid_token}")])
     kb = devices_kb + kb
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
-
+ 
     if isinstance(event, types.CallbackQuery):
         try:
             await event.answer()
@@ -472,8 +479,8 @@ async def my_devices_command_handler(
             await event.message.answer(text, reply_markup=markup)
     else:
         await target.answer(text, reply_markup=markup)
-
-
+ 
+ 
 @router.callback_query(F.data.startswith("disconnect_device:"))
 async def disconnect_device_handler(
     callback: types.CallbackQuery,
@@ -487,14 +494,14 @@ async def disconnect_device_handler(
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
     get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
-
+ 
     if not settings.MY_DEVICES_SECTION_ENABLED:
         try:
             await callback.answer(get_text("my_devices_feature_disabled"), show_alert=True)
         except Exception as exc:
             logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
-
+ 
     try:
         _, hwid_token = callback.data.split(":", 1)
     except Exception:
@@ -503,34 +510,34 @@ async def disconnect_device_handler(
         except Exception as exc:
             logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
-
+ 
     active = await subscription_service.get_active_subscription_details(session, callback.from_user.id)
     if not active or not active.get("user_id"):
         await callback.answer(get_text("subscription_not_active"), show_alert=True)
         return
-
+ 
     devices = await panel_service.get_user_devices(active.get("user_id"))
     if not devices:
         await callback.answer(get_text("no_devices_found"), show_alert=True)
         return
-
+ 
     devices_list_raw = []
     if isinstance(devices, dict):
         devices_list_raw = devices.get("devices") or []
     elif isinstance(devices, list):
         devices_list_raw = devices
-
+ 
     hwid = None
     for device in devices_list_raw:
         hwid_candidate = device.get("hwid")
         if hwid_candidate and _hwid_callback_token(hwid_candidate) == hwid_token:
             hwid = hwid_candidate
             break
-
+ 
     if not hwid:
         await callback.answer(get_text("error_try_again"), show_alert=True)
         return
-
+ 
     success = await panel_service.disconnect_device(active.get("user_id"), hwid)
     if not success:
         await callback.answer(get_text("error_try_again"), show_alert=True)
@@ -541,8 +548,8 @@ async def disconnect_device_handler(
     except Exception as exc:
         logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     await my_devices_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
-
-
+ 
+ 
 @router.callback_query(F.data.startswith("toggle_autorenew:"))
 async def toggle_autorenew_handler(
     callback: types.CallbackQuery,
@@ -556,7 +563,7 @@ async def toggle_autorenew_handler(
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
     get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
-
+ 
     try:
         _, payload = callback.data.split(":", 1)
         sub_id_str, enable_str = payload.split(":")
@@ -568,7 +575,7 @@ async def toggle_autorenew_handler(
         except Exception as exc:
             logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
-
+ 
     sub = await session.get(Subscription, sub_id)
     if not sub or sub.user_id != callback.from_user.id:
         await callback.answer(get_text("error_try_again"), show_alert=True)
@@ -584,7 +591,7 @@ async def toggle_autorenew_handler(
             except Exception as exc:
                 logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
             return
-
+ 
     # Show confirmation popup and inline buttons
     confirm_text = get_text("autorenew_confirm_enable") if enable else get_text("autorenew_confirm_disable")
     kb = get_autorenew_confirm_keyboard(enable, sub.subscription_id, current_lang, i18n)
@@ -600,8 +607,8 @@ async def toggle_autorenew_handler(
     except Exception as exc:
         logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     return
-
-
+ 
+ 
 @router.callback_query(F.data.startswith("autorenew:confirm:"))
 async def confirm_autorenew_handler(
     callback: types.CallbackQuery,
@@ -615,7 +622,7 @@ async def confirm_autorenew_handler(
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
     get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
-
+ 
     try:
         _, _, sub_id_str, enable_str = callback.data.split(":", 3)
         sub_id = int(sub_id_str)
@@ -626,7 +633,7 @@ async def confirm_autorenew_handler(
         except Exception as exc:
             logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
-
+ 
     sub = await session.get(Subscription, sub_id)
     if not sub or sub.user_id != callback.from_user.id:
         await callback.answer(get_text("error_try_again"), show_alert=True)
@@ -646,7 +653,7 @@ async def confirm_autorenew_handler(
             except Exception as exc:
                 logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
             return
-
+ 
     await subscription_dal.update_subscription(session, sub.subscription_id, {"auto_renew_enabled": enable})
     await session.commit()
     try:
@@ -654,8 +661,8 @@ async def confirm_autorenew_handler(
     except Exception as exc:
         logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
-
-
+ 
+ 
 @router.callback_query(F.data == "autorenew:cancel")
 async def autorenew_cancel_from_webhook_button(
     callback: types.CallbackQuery,
@@ -669,7 +676,7 @@ async def autorenew_cancel_from_webhook_button(
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
     get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
-
+ 
     # Disable auto-renew on the active subscription
     from db.dal import subscription_dal
     sub = await subscription_dal.get_active_subscription_by_user_id(session, callback.from_user.id)
@@ -692,8 +699,8 @@ async def autorenew_cancel_from_webhook_button(
     except Exception as exc:
         logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
     await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
-
-
+ 
+ 
 @router.message(Command("connect"))
 async def connect_command_handler(
     message: types.Message,
@@ -706,3 +713,65 @@ async def connect_command_handler(
 ):
     logging.info(f"User {message.from_user.id} used /connect command.")
     await my_subscription_command_handler(message, i18n_data, settings, panel_service, subscription_service, session, bot)
+ 
+ 
+@router.callback_query(F.data == "sub_qr:generate")
+async def subscription_qr_handler(
+    callback: types.CallbackQuery,
+    i18n_data: dict,
+    settings: Settings,
+    subscription_service: SubscriptionService,
+    session: AsyncSession,
+):
+    """Генерация QR-кода с ссылкой на подписку.
+    Удаляет сообщение с меню, отправляет фото с кнопкой Назад.
+    """
+    from bot.keyboards.inline.user_keyboards import get_subscription_qr_keyboard
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n = i18n_data.get("i18n_instance")
+ 
+    active = await subscription_service.get_active_subscription_details(
+        session, callback.from_user.id
+    )
+ 
+    if not active:
+        await callback.answer("Подписка не активна.", show_alert=True)
+        return
+ 
+    config_link = active.get("connect_button_url") or active.get("config_link")
+    if not config_link:
+        await callback.answer("Ссылка подписки недоступна.", show_alert=True)
+        return
+ 
+    import urllib.parse
+    encoded = urllib.parse.quote(config_link, safe="")
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={encoded}"
+ 
+    # Кнопка "Назад" в меню подписки
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="◀️ Назад",
+        callback_data="main_action:my_subscription"
+    ))
+    markup = builder.as_markup()
+ 
+    try:
+        # Удаляем старое сообщение с меню
+        await callback.message.delete()
+    except Exception:
+        pass
+ 
+    try:
+        await callback.message.answer_photo(
+            photo=qr_url,
+            caption="📷 <b>QR-код вашей подписки</b>\n\nОтсканируйте для подключения.",
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logging.error("Failed to send subscription QR: %s", e)
+        await callback.answer("Ошибка генерации QR-кода.", show_alert=True)
+        return
+    await callback.answer()
