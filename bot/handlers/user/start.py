@@ -311,7 +311,8 @@ async def ensure_required_channel_subscription(
 @router.message(CommandStart())
 @router.message(CommandStart(magic=F.args.regexp(r"^ref_((?:[uU][A-Za-z0-9]{9})|(?:[A-Za-z0-9]{9})|\d+)$").as_("ref_match")))
 @router.message(CommandStart(magic=F.args.regexp(r"^promo_(\w+)$").as_("promo_match")))
-@router.message(CommandStart(magic=F.args.regexp(r"^(?!ref_|promo_)([A-Za-z0-9_\-]{2,64})$").as_("ad_param_match")))
+@router.message(CommandStart(magic=F.args.regexp(r"^gift_([A-Za-z0-9_\-]{10,})$").as_("gift_match")))
+@router.message(CommandStart(magic=F.args.regexp(r"^(?!ref_|promo_|gift_)([A-Za-z0-9_\-]{2,64})$").as_("ad_param_match")))
 async def start_command_handler(message: types.Message,
                                 state: FSMContext,
                                 settings: Settings,
@@ -320,6 +321,7 @@ async def start_command_handler(message: types.Message,
                                 session: AsyncSession,
                                 ref_match: Optional[re.Match] = None,
                                 promo_match: Optional[re.Match] = None,
+                                gift_match: Optional[re.Match] = None,
                                 ad_param_match: Optional[re.Match] = None):
     await state.clear()
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
@@ -332,6 +334,7 @@ async def start_command_handler(message: types.Message,
 
     referred_by_user_id: Optional[int] = None
     promo_code_to_apply: Optional[str] = None
+    gift_token_to_apply: Optional[str] = None
     ad_start_param: Optional[str] = None
 
     if ref_match and settings.REFERRAL_ENABLED:
@@ -360,6 +363,9 @@ async def start_command_handler(message: types.Message,
     elif promo_match:
         promo_code_to_apply = promo_match.group(1)
         logging.info(f"User {user_id} started with promo code: {promo_code_to_apply}")
+    elif gift_match:
+        gift_token_to_apply = gift_match.group(1)
+        logging.info(f"User {user_id} started with gift token: {gift_token_to_apply}")
     elif ad_param_match:
         ad_start_param = ad_param_match.group(1)
         logging.info(f"User {user_id} started with ad start param: {ad_start_param}")
@@ -564,6 +570,18 @@ async def start_command_handler(message: types.Message,
             logging.error(f"Error auto-applying promo code '{promo_code_to_apply}' for user {user_id}: {e}")
             await session.rollback()
 
+    # Handle gift activation
+    if gift_token_to_apply:
+        from . import gifts as _gifts_module
+        await _gifts_module.activate_gift_by_token(
+            message, gift_token_to_apply, i18n_data, settings, session,
+            subscription_service, message.bot
+        )
+        # Still show main menu after gift activation
+        await send_main_menu(message, settings, i18n_data, subscription_service,
+                             session, is_edit=False)
+        return
+
     await send_main_menu(message,
                          settings,
                          i18n_data,
@@ -737,6 +755,7 @@ async def main_action_callback_handler(
     from . import referral as user_referral_handlers
     from . import promo_user as user_promo_handlers
     from . import trial_handler as user_trial_handlers
+    from . import gifts as user_gifts_handlers
 
     if not callback.message:
         await callback.answer("Error: message context lost.", show_alert=True)
@@ -745,14 +764,17 @@ async def main_action_callback_handler(
     if action == "subscribe":
         await user_subscription_handlers.display_subscription_options(
             callback, i18n_data, settings, session, promo_code_service=promo_code_service)
+
     elif action == "my_subscription":
         await user_subscription_handlers.my_subscription_command_handler(
             callback, i18n_data, settings, panel_service, subscription_service,
             session, bot)
+
     elif action == "my_devices":
         await user_subscription_handlers.my_devices_command_handler(
             callback, i18n_data, settings, panel_service, subscription_service,
             session, bot)
+
     elif action == "referral":
         if not settings.REFERRAL_ENABLED:
             await callback.answer(_("referral_no_bonuses_configured"),
@@ -760,15 +782,41 @@ async def main_action_callback_handler(
             return
         await user_referral_handlers.referral_command_handler(
             callback, settings, i18n_data, referral_service, bot, session)
+
+    elif action == "info":
+        from bot.keyboards.inline.user_keyboards import get_info_keyboard
+        text = "ℹ️ <b>Информация</b>\n\nВыберите раздел:"
+        markup = get_info_keyboard(current_lang, i18n)
+        try:
+            await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
+        await callback.answer()
+
+    elif action == "gifts":
+        await user_gifts_handlers.show_gifts_menu(callback, i18n_data, settings)
+
+    elif action == "settings":
+        from bot.keyboards.inline.user_keyboards import get_settings_keyboard
+        text = "⚙️ <b>Настройки</b>\n\nВыберите параметр:"
+        markup = get_settings_keyboard(current_lang, i18n)
+        try:
+            await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
+        await callback.answer()
+
     elif action == "apply_promo":
         await user_promo_handlers.prompt_promo_code_input(
             callback, state, i18n_data, settings, session)
+
     elif action == "request_trial":
         await user_trial_handlers.request_trial_confirmation_handler(
             callback, settings, i18n_data, subscription_service, session)
-    elif action == "language":
 
+    elif action == "language":
         await language_command_handler(callback, i18n_data, settings)
+
     elif action == "back_to_main":
         await send_main_menu(callback,
                              settings,
@@ -776,6 +824,7 @@ async def main_action_callback_handler(
                              subscription_service,
                              session,
                              is_edit=True)
+
     elif action == "back_to_main_keep":
         await send_main_menu(callback,
                              settings,
@@ -783,5 +832,6 @@ async def main_action_callback_handler(
                              subscription_service,
                              session,
                              is_edit=False)
+
     else:
         await callback.answer(_("main_menu_unknown_action"), show_alert=True)
