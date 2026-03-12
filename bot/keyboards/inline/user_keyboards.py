@@ -253,13 +253,8 @@ def get_my_subscription_keyboard(
         builder.row(_btn("connect", url=connect_url))
     if show_devices_button and has_active_sub:
         dev_label = str(max_devices) if max_devices and max_devices > 0 else "∞"
-        cfg = BUTTONS["my_devices"]
-        extra = {"icon_custom_emoji_id": cfg["emoji_id"]} if cfg["emoji_id"] else {}
-        builder.row(InlineKeyboardButton(
-            text=f"{cfg['text']} ({current_devices}/{dev_label})",
-            callback_data="main_action:my_devices",
-            **extra,
-        ))
+        label = f"{BUTTONS['my_devices']['text']} ({current_devices}/{dev_label})"
+        builder.row(_btn("my_devices", cb="main_action:my_devices", text_override=label))
     if has_active_sub and subscription_link:
         builder.row(_btn("sub_qr", cb="sub_qr:generate"))
     builder.row(_btn("vpn_extend", cb="main_action:subscribe"))
