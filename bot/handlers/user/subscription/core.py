@@ -260,53 +260,11 @@ async def my_subscription_command_handler(
                     )
                 ])
  
+        logging.info("MY_DEVICES_SECTION_ENABLED=%s", settings.MY_DEVICES_SECTION_ENABLED)
         if settings.MY_DEVICES_SECTION_ENABLED:
-            max_devices_value = active.get("max_devices")
-            max_devices_display = get_text("devices_unlimited_label")
-            if max_devices_value not in (None, 0):
-                try:
-                    max_devices_int = int(max_devices_value)
-                    if max_devices_int >= 0:
-                        max_devices_display = str(max_devices_int)
-                except (TypeError, ValueError):
-                    max_devices_display = str(max_devices_value)
-            current_devices_display = "?"
-            user_uuid = active.get("user_id")
-            devices_response = None
-            if user_uuid:
-                try:
-                    devices_response = await panel_service.get_user_devices(user_uuid)
-                except Exception:
-                    logging.exception("Failed to load devices for user %s", user_uuid)
-            if devices_response:
-                devices_count: Optional[int] = None
-                if isinstance(devices_response, dict):
-                    devices_list = devices_response.get("devices")
-                    if isinstance(devices_list, list):
-                        devices_count = len(devices_list)
-                    elif isinstance(devices_list, int):
-                        devices_count = devices_list
-                    else:
-                        try:
-                            devices_count = len(devices_list)  # type: ignore[arg-type]
-                        except Exception:
-                            devices_count = None
-                    if devices_count is None:
-                        total_value = devices_response.get("total")
-                        if isinstance(total_value, int):
-                            devices_count = total_value
-                elif isinstance(devices_response, list):
-                    devices_count = len(devices_response)
-                if devices_count is not None:
-                    current_devices_display = str(devices_count)
-            devices_button_text = get_text(
-                "devices_button",
-                current_devices=current_devices_display,
-                max_devices=max_devices_display,
-            )
             prepend_rows.append([
                 InlineKeyboardButton(
-                    text=devices_button_text,
+                    text="Управление устройствами",
                     callback_data="main_action:my_devices",
                 )
             ])
@@ -333,7 +291,7 @@ async def my_subscription_command_handler(
         cfg_link_for_qr = connect_button_url or config_link_display
         if cfg_link_for_qr:
             prepend_rows.append([
-                InlineKeyboardButton(text="📷 QR-код подписки", callback_data="sub_qr:generate")
+                InlineKeyboardButton(text="QR-код подписки", callback_data="sub_qr:generate")
             ])
  
         if prepend_rows:
@@ -363,7 +321,7 @@ async def my_subscription_command_handler(
  
 @router.callback_query(F.data == "main_action:my_devices")
 async def my_devices_command_handler(
-    event: Union[types.Message, types.CallbackQuery],
+    event: types.CallbackQuery,
     i18n_data: dict,
     settings: Settings,
     panel_service: PanelApiService,
@@ -371,48 +329,39 @@ async def my_devices_command_handler(
     session: AsyncSession,
     bot: Bot,
 ):
-    target = event.message if isinstance(event, types.CallbackQuery) else event
+    target = event.message
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: JsonI18n = i18n_data.get("i18n_instance")
     get_text = lambda key, **kw: i18n.gettext(current_lang, key, **kw)
- 
+
     if not i18n or not target:
-        if isinstance(event, types.Message):
-            await event.answer(get_text("error_occurred_try_again"))
+        try:
+            await event.answer(get_text("error_occurred_try_again"), show_alert=True)
+        except Exception as exc:
+            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
- 
+
     if not settings.MY_DEVICES_SECTION_ENABLED:
-        if isinstance(event, types.CallbackQuery):
-            try:
-                await event.answer(get_text("my_devices_feature_disabled"), show_alert=True)
-            except Exception as exc:
-                logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        else:
-            await target.answer(get_text("my_devices_feature_disabled"))
+        try:
+            await event.answer(get_text("my_devices_feature_disabled"), show_alert=True)
+        except Exception as exc:
+            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
- 
-    # TODO: context?
+
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
     if not active or not active.get("user_id"):
-        message = get_text("subscription_not_active")
-        if isinstance(event, types.CallbackQuery):
-            try:
-                await event.answer(message, show_alert=True)
-            except Exception as exc:
-                logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        else:
-            await target.answer(message)
+        try:
+            await event.answer(get_text("subscription_not_active"), show_alert=True)
+        except Exception as exc:
+            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
- 
+
     devices = await panel_service.get_user_devices(active.get("user_id")) if active else None
     if not devices:
-        if isinstance(event, types.CallbackQuery):
-            try:
-                await event.answer(get_text("no_devices_found"), show_alert=True)
-            except Exception as exc:
-                logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        else:
-            await target.answer(get_text("no_devices_found"))
+        try:
+            await event.answer(get_text("no_devices_found"), show_alert=True)
+        except Exception as exc:
+            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
         return
  
     devices_list_raw = []
@@ -455,7 +404,7 @@ async def my_devices_command_handler(
  
     base_markup = get_back_to_main_menu_markup(current_lang, i18n, callback_data="main_action:my_subscription")
     kb = base_markup.inline_keyboard
- 
+
     devices_kb = []
     for index, device in enumerate(devices_list_raw, start=1):
         hwid = device.get('hwid')
@@ -463,21 +412,18 @@ async def my_devices_command_handler(
             continue
         device_button_text = get_text("disconnect_device_button", hwid=_shorten_hwid_for_display(hwid), index=index)
         hwid_token = _hwid_callback_token(hwid)
- 
+
         devices_kb.append([InlineKeyboardButton(text=device_button_text, callback_data=f"disconnect_device:{hwid_token}")])
     kb = devices_kb + kb
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
- 
-    if isinstance(event, types.CallbackQuery):
-        try:
-            await event.answer()
-        except Exception as exc:
-            logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
-        try:
-            await event.message.edit_text(text, reply_markup=markup)
-        except Exception:
-            await event.message.answer(text, reply_markup=markup)
-    else:
+
+    try:
+        await event.answer()
+    except Exception as exc:
+        logging.debug("Suppressed exception in bot/handlers/user/subscription/core.py: %s", exc)
+    try:
+        await target.edit_text(text, reply_markup=markup)
+    except Exception:
         await target.answer(text, reply_markup=markup)
  
  
@@ -722,6 +668,7 @@ async def subscription_qr_handler(
     settings: Settings,
     subscription_service: SubscriptionService,
     session: AsyncSession,
+    bot: Bot,
 ):
     """Генерация QR-кода с ссылкой на подписку.
     Удаляет сообщение с меню, отправляет фото с кнопкой Назад.
@@ -753,12 +700,12 @@ async def subscription_qr_handler(
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text="◀️ Назад",
-        callback_data="main_action:my_subscription"
+        callback_data="sub_qr:back"
     ))
     markup = builder.as_markup()
  
     try:
-        # Удаляем старое сообщение с меню
+        # Удаляем старе сообщение с меню
         await callback.message.delete()
     except Exception:
         pass
@@ -775,3 +722,24 @@ async def subscription_qr_handler(
         await callback.answer("Ошибка генерации QR-кода.", show_alert=True)
         return
     await callback.answer()
+
+
+@router.callback_query(F.data == "sub_qr:back")
+async def subscription_qr_back_handler(
+    callback: types.CallbackQuery,
+    i18n_data: dict,
+    settings: Settings,
+    panel_service: PanelApiService,
+    subscription_service: SubscriptionService,
+    session: AsyncSession,
+    bot: Bot,
+):
+    """Удалить QR-фото и вернуться в меню подписки."""
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await my_subscription_command_handler(
+        callback, i18n_data, settings, panel_service,
+        subscription_service, session, bot
+    )
