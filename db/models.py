@@ -303,3 +303,18 @@ class AdAttribution(Base):
 
     user = relationship("User")
     campaign = relationship("AdCampaign", back_populates="attributions")
+
+
+class Gift(Base):
+    """Подарочные подписки."""
+    __tablename__ = "gifts"
+
+    gift_id = Column(Integer, primary_key=True, autoincrement=True)
+    buyer_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False, index=True)
+    plan = Column(String, nullable=False)          # standard / family / corporate
+    months = Column(Integer, nullable=False)
+    token = Column(String(32), nullable=False, unique=True, index=True)
+    is_used = Column(Boolean, default=False, index=True)
+    activated_by_id = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=True)
+    activated_at = Column(DateTime(timezone=True), nullable=True)
